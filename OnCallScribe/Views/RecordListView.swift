@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct RecordListView: View {
     @Environment(\.modelContext) private var modelContext
@@ -10,6 +11,9 @@ struct RecordListView: View {
     @State private var showingSettings = false
     @State private var showingExport = false
     @State private var selectedRecord: TriageRecord?
+    @State private var recordToEdit: TriageRecord?
+    @State private var recordToDelete: TriageRecord?
+    @State private var showingDeleteAlert = false
 
     @AppStorage("onCallPhysicianName") private var physicianName = ""
 
@@ -52,11 +56,68 @@ struct RecordListView: View {
                                         HapticFeedback.impact(.light)
                                         selectedRecord = record
                                     }
-                                    .contextMenu {
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                         Button(role: .destructive) {
-                                            deleteRecord(record)
+                                            recordToDelete = record
+                                            showingDeleteAlert = true
                                         } label: {
                                             Label("Delete", systemImage: "trash")
+                                        }
+                                    }
+                                    .contextMenu {
+                                        // Edit Record
+                                        Button {
+                                            HapticFeedback.impact(.light)
+                                            recordToEdit = record
+                                        } label: {
+                                            Label("Edit Record", systemImage: "pencil")
+                                        }
+
+                                        // Call Back
+                                        if let callbackNumber = record.callbackNumber, !callbackNumber.isEmpty {
+                                            Button {
+                                                callPhoneNumber(callbackNumber)
+                                            } label: {
+                                                Label("Call Back", systemImage: "phone.arrow.up.right")
+                                            }
+                                        }
+
+                                        Divider()
+
+                                        // Priority Toggle
+                                        if record.priorityEnum == .routine {
+                                            Button {
+                                                togglePriority(record, to: .urgent)
+                                            } label: {
+                                                Label("Mark as Urgent", systemImage: "exclamationmark.circle")
+                                            }
+                                        } else if record.priorityEnum == .urgent {
+                                            Button {
+                                                togglePriority(record, to: .emergent)
+                                            } label: {
+                                                Label("Mark as Emergent", systemImage: "bolt.circle")
+                                            }
+                                            Button {
+                                                togglePriority(record, to: .routine)
+                                            } label: {
+                                                Label("Mark as Routine", systemImage: "circle")
+                                            }
+                                        } else {
+                                            Button {
+                                                togglePriority(record, to: .routine)
+                                            } label: {
+                                                Label("Mark as Routine", systemImage: "circle")
+                                            }
+                                        }
+
+                                        Divider()
+
+                                        // Delete Record
+                                        Button(role: .destructive) {
+                                            recordToDelete = record
+                                            showingDeleteAlert = true
+                                        } label: {
+                                            Label("Delete Record", systemImage: "trash")
                                         }
                                     }
                             }
@@ -119,6 +180,25 @@ struct RecordListView: View {
                     ExportView(records: records)
                 }
             }
+            .sheet(item: $recordToEdit) { record in
+                NavigationStack {
+                    RecordFormView(mode: .edit(record))
+                }
+            }
+            .alert("Delete this triage record?", isPresented: $showingDeleteAlert) {
+                Button("Cancel", role: .cancel) {
+                    recordToDelete = nil
+                }
+                Button("Delete", role: .destructive) {
+                    if let record = recordToDelete {
+                        HapticFeedback.notification(.warning)
+                        modelContext.delete(record)
+                        recordToDelete = nil
+                    }
+                }
+            } message: {
+                Text("This cannot be undone.")
+            }
         }
         .preferredColorScheme(.dark)
     }
@@ -161,6 +241,26 @@ struct RecordListView: View {
     private func deleteRecord(_ record: TriageRecord) {
         HapticFeedback.impact(.medium)
         modelContext.delete(record)
+    }
+
+    private func togglePriority(_ record: TriageRecord, to newPriority: Priority) {
+        HapticFeedback.notification(.success)
+        record.priorityEnum = newPriority
+        record.lastModified = Date()
+    }
+
+    private func callPhoneNumber(_ number: String) {
+        // Clean the phone number - remove non-numeric characters except +
+        let cleaned = number.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
+        guard !cleaned.isEmpty,
+              let url = URL(string: "tel://\(cleaned)") else {
+            return
+        }
+
+        if UIApplication.shared.canOpenURL(url) {
+            HapticFeedback.impact(.light)
+            UIApplication.shared.open(url)
+        }
     }
 }
 
