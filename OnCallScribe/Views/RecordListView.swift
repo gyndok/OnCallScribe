@@ -10,27 +10,69 @@ struct RecordListView: View {
     @State private var showingNewRecord = false
     @State private var showingSettings = false
     @State private var showingExport = false
+    @State private var showingFilters = false
     @State private var selectedRecord: TriageRecord?
     @State private var recordToEdit: TriageRecord?
     @State private var recordToDelete: TriageRecord?
     @State private var showingDeleteAlert = false
+    @State private var filter = RecordFilter()
 
     @AppStorage("onCallPhysicianName") private var physicianName = ""
 
+    private var knownDoctors: [String] {
+        let doctors = Set(records.compactMap { $0.attendingDoctor?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty })
+        return Array(doctors).sorted()
+    }
+
     private var filteredRecords: [TriageRecord] {
-        if searchText.isEmpty {
-            return records
+        var result = records
+
+        // Apply text search
+        if !searchText.isEmpty {
+            let lowercasedSearch = searchText.lowercased()
+            result = result.filter { record in
+                record.patientName?.lowercased().contains(lowercasedSearch) == true ||
+                record.attendingDoctor?.lowercased().contains(lowercasedSearch) == true ||
+                record.chiefComplaint?.lowercased().contains(lowercasedSearch) == true ||
+                record.advice?.lowercased().contains(lowercasedSearch) == true ||
+                record.disposition?.lowercased().contains(lowercasedSearch) == true ||
+                record.tags.contains { $0.lowercased().contains(lowercasedSearch) }
+            }
         }
 
-        let lowercasedSearch = searchText.lowercased()
-        return records.filter { record in
-            record.patientName?.lowercased().contains(lowercasedSearch) == true ||
-            record.attendingDoctor?.lowercased().contains(lowercasedSearch) == true ||
-            record.chiefComplaint?.lowercased().contains(lowercasedSearch) == true ||
-            record.advice?.lowercased().contains(lowercasedSearch) == true ||
-            record.disposition?.lowercased().contains(lowercasedSearch) == true ||
-            record.tags.contains { $0.lowercased().contains(lowercasedSearch) }
+        // Apply date range filter
+        if let startDate = filter.startDate {
+            result = result.filter { $0.dateReceived >= startDate }
         }
+        if let endDate = filter.endDate {
+            result = result.filter { $0.dateReceived <= endDate }
+        }
+
+        // Apply priority filter
+        if !filter.priorities.isEmpty {
+            result = result.filter { filter.priorities.contains($0.priorityEnum) }
+        }
+
+        // Apply disposition filter
+        if !filter.dispositions.isEmpty {
+            result = result.filter { record in
+                guard let disposition = record.dispositionEnum else { return false }
+                return filter.dispositions.contains(disposition)
+            }
+        }
+
+        // Apply follow-up filter
+        if let followUpNeeded = filter.followUpNeeded {
+            result = result.filter { $0.followUpNeeded == followUpNeeded }
+        }
+
+        // Apply attending doctor filter
+        if let doctor = filter.attendingDoctor {
+            result = result.filter { $0.attendingDoctor == doctor }
+        }
+
+        return result
     }
 
     var body: some View {
@@ -47,6 +89,18 @@ struct RecordListView: View {
                             searchBar
                                 .padding(.horizontal, 16)
                                 .padding(.top, 8)
+
+                            // Active filters indicator
+                            if filter.isActive {
+                                activeFiltersIndicator
+                                    .padding(.horizontal, 16)
+                            }
+
+                            // No results message
+                            if filteredRecords.isEmpty {
+                                noResultsView
+                                    .padding(.top, 40)
+                            }
 
                             // Record cards
                             ForEach(filteredRecords) { record in
@@ -177,6 +231,9 @@ struct RecordListView: View {
                     RecordFormView(mode: .edit(record))
                 }
             }
+            .sheet(isPresented: $showingFilters) {
+                SearchFilterView(filter: $filter, knownDoctors: knownDoctors)
+            }
             .alert("Delete this triage record?", isPresented: $showingDeleteAlert) {
                 Button("Cancel", role: .cancel) {
                     recordToDelete = nil
@@ -213,6 +270,67 @@ struct RecordListView: View {
         }
     }
 
+    private var noResultsView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 48))
+                .foregroundColor(Color.txtTertiary)
+
+            Text("No Matching Records")
+                .font(.title3.weight(.semibold))
+                .foregroundColor(Color.txtPrimary)
+
+            Text("Try adjusting your search or filters")
+                .font(.subheadline)
+                .foregroundColor(Color.txtSecondary)
+
+            Button {
+                HapticFeedback.impact(.light)
+                searchText = ""
+                filter.clear()
+            } label: {
+                Text("Clear All Filters")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(Color.accentTeal)
+            }
+            .padding(.top, 8)
+        }
+    }
+
+    private var activeFiltersIndicator: some View {
+        HStack {
+            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                .foregroundColor(Color.accentTeal)
+                .font(.caption)
+
+            Text("\(filter.activeFilterCount) filter\(filter.activeFilterCount == 1 ? "" : "s") active")
+                .font(.caption.weight(.medium))
+                .foregroundColor(Color.txtSecondary)
+
+            Text("·")
+                .foregroundColor(Color.txtTertiary)
+
+            Text("\(filteredRecords.count) of \(records.count) records")
+                .font(.caption)
+                .foregroundColor(Color.txtTertiary)
+
+            Spacer()
+
+            Button {
+                HapticFeedback.impact(.light)
+                filter.clear()
+            } label: {
+                Text("Clear")
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(Color.prioUrgent)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.bgSecondary)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
@@ -220,6 +338,29 @@ struct RecordListView: View {
 
             TextField("Search records...", text: $searchText)
                 .foregroundColor(Color.txtPrimary)
+
+            // Filter button
+            Button {
+                HapticFeedback.impact(.light)
+                showingFilters = true
+            } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: filter.isActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        .font(.title3)
+                        .foregroundColor(filter.isActive ? Color.accentTeal : Color.txtTertiary)
+
+                    // Badge for active filter count
+                    if filter.isActive {
+                        Text("\(filter.activeFilterCount)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 16, height: 16)
+                            .background(Color.prioUrgent)
+                            .clipShape(Circle())
+                            .offset(x: 6, y: -6)
+                    }
+                }
+            }
         }
         .padding(12)
         .background(Color.bgSecondary)
