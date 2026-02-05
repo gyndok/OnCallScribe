@@ -56,14 +56,6 @@ struct RecordListView: View {
                                         HapticFeedback.impact(.light)
                                         selectedRecord = record
                                     }
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button(role: .destructive) {
-                                            recordToDelete = record
-                                            showingDeleteAlert = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
                                     .contextMenu {
                                         // Edit Record
                                         Button {
