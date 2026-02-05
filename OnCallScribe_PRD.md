@@ -354,7 +354,162 @@ While this architecture does not require a Business Associate Agreement (BAA) si
 
 ---
 
-## 9. Claude Code Build Instructions
+## 9. App Store Launch Plan
+
+### 9.1 Monetization Strategy
+
+**Model:** Freemium with subscription upgrade
+
+| Tier | Price | Features |
+|------|-------|----------|
+| **Free** | $0 | 50 records, basic search, text export, standard parsing |
+| **Premium** | $4.99/month or $49.99/year | Unlimited records, advanced filters, PDF export, app lock, quick templates, priority support |
+
+**Target Market Progression:**
+1. Individual physicians (Year 1 focus)
+2. Small medical groups (Year 2)
+3. Hospital systems / Enterprise (Year 3+)
+
+**Revenue Projections (Conservative):**
+- Year 1: 5,000 downloads, 3% conversion = 150 subscribers × $50/year = ~$7,500
+- Year 1 (Optimistic): 15,000 downloads, 5% conversion = 750 subscribers = ~$37,500
+
+### 9.2 Pre-Launch Phase (Weeks 1-4)
+
+**Week 1-2: Administrative Setup**
+- [ ] Apple Developer Program enrollment ($99/year)
+- [ ] Draft Privacy Policy (local-only data storage, no data collection)
+- [ ] Draft Terms of Service
+- [ ] Create App Store Connect listing (placeholder)
+- [ ] Design app icon variations for App Store (1024×1024)
+- [ ] Create screenshots for all required device sizes
+
+**Week 3-4: Beta Testing**
+- [ ] Deploy via TestFlight (Apple's official beta platform)
+- [ ] Recruit 15-20 beta testers across specialties:
+  - 5+ OB-GYN physicians
+  - 5+ Family Medicine / Internal Medicine
+  - 3+ Pediatrics
+  - 2+ Other specialties
+- [ ] Create feedback survey (Google Forms or Typeform)
+- [ ] Collect and prioritize bug reports
+- [ ] Iterate on UX based on real-world usage
+
+**Beta Tester Recruitment Channels:**
+- Personal network / colleagues
+- Medical school classmates
+- r/medicine, r/residency (Reddit)
+- Doximity connections
+
+### 9.3 Launch Phase (Week 5-6)
+
+**App Store Submission Checklist:**
+- [ ] App Store description (keyword-optimized)
+- [ ] Screenshots (6.7", 6.5", 5.5" displays minimum)
+- [ ] App preview video (optional but recommended)
+- [ ] Privacy Policy URL (hosted on GitHub Pages or simple site)
+- [ ] Support URL
+- [ ] Keywords (max 100 characters)
+- [ ] Age rating questionnaire
+- [ ] App Review notes (explain medical use case)
+
+**Suggested Keywords:**
+```
+triage,on-call,physician,medical,documentation,HIPAA,clinical,pager,callback,notes
+```
+
+**App Store Description Structure:**
+1. Pain point hook (first 2 lines visible before "more")
+2. Key features (bullet points)
+3. Privacy/security emphasis
+4. Call to action
+
+**Launch Marketing (Low Budget):**
+- Post to r/medicine, r/residency, r/obgyn with permission
+- Share on Doximity
+- Personal LinkedIn post
+- Email to beta testers asking for App Store reviews
+- Reach out to 2-3 medical blogs/podcasts
+
+### 9.4 Growth Phase (Months 1-3)
+
+**User Acquisition:**
+- Monitor App Store reviews daily, respond to all feedback
+- Implement most-requested features from user feedback
+- Create short tutorial videos for social media
+- Guest post on medical blogs about on-call documentation
+
+**Metrics to Track:**
+- Daily/weekly downloads
+- Free → Premium conversion rate
+- Retention (Day 1, Day 7, Day 30)
+- App Store rating and review count
+- Feature usage analytics (if implemented)
+
+**3-Month Targets:**
+- 1,000+ downloads
+- 50+ paying subscribers
+- 4.5+ star rating
+- 20+ written reviews
+
+### 9.5 Scaling Phase (Months 4-12)
+
+**Product Expansion:**
+- Implement top 3 requested features from v2 roadmap
+- Consider callback reminders (high clinical value)
+- Evaluate Android demand from user feedback
+
+**Business Development:**
+- Research medical association partnerships (ACOG, AAFP, AAP)
+- Develop group/institutional pricing model
+- Create case study from successful users
+
+**6-Month Targets:**
+- 5,000+ downloads
+- 200+ paying subscribers
+- First group license inquiry
+
+**12-Month Targets:**
+- 15,000+ downloads
+- 500+ paying subscribers
+- Android version decision made
+- First institutional pilot
+
+### 9.6 Competitive Advantages
+
+| Advantage | Details |
+|-----------|---------|
+| **HIPAA by Design** | Local-only storage eliminates BAA requirements and cloud security concerns |
+| **On-Device AI** | Apple Foundation Models = no data sent to servers for parsing |
+| **Purpose-Built** | Designed specifically for on-call triage, not a generic notes app |
+| **Speed** | Optimized for tired physicians—paste, review, save in <30 seconds |
+| **Low Competition** | Few dedicated triage documentation apps exist |
+
+### 9.7 Risk Mitigation
+
+| Risk | Mitigation |
+|------|------------|
+| Low initial downloads | Freemium removes cost barrier; focus on organic medical community growth |
+| Negative reviews | Respond quickly, fix bugs within 48 hours, personal outreach |
+| Feature requests beyond scope | Maintain public roadmap, set expectations |
+| Competitor enters market | First-mover advantage, build loyal user base, iterate quickly |
+| Apple rejects app | Pre-review with Apple (request available), clear medical disclaimer |
+
+### 9.8 Legal Considerations
+
+**Required Before Launch:**
+- Privacy Policy (emphasize local-only storage)
+- Terms of Service
+- Medical Disclaimer: "This app is a documentation tool and does not provide medical advice"
+
+**HIPAA Notes:**
+- App stores data locally only—no BAA required with users
+- If cloud sync added later, HIPAA compliance review required
+- Users responsible for device security (recommend app lock feature)
+
+---
+
+## 10. Claude Code Build Instructions
 
 Place this PRD file in the project root directory. Then in Claude Code:
 
