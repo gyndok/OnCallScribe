@@ -324,14 +324,33 @@ While this architecture does not require a Business Associate Agreement (BAA) si
 - Dark mode visual polish
 - App icon and launch screen
 
-### 8.4 Future Considerations (Not in Scope for v1)
+### 8.4 Future Considerations (v2 and Beyond)
 
-- iPad layout optimization
-- PDF export with clinic branding
-- Siri Shortcuts integration ("Hey Siri, log a triage call")
-- Apple Watch complication showing active call count
-- Integration with specific answering service APIs (if available)
-- On-device ML model for improved parsing accuracy over time
+**High Priority — Clinical Value:**
+
+- **Callback Reminders:** Set local notifications to follow up with a patient in X hours. Integrates with iOS notification system. Addresses medicolegal follow-up documentation concerns.
+- **Quick Response Templates:** Pre-saved advice snippets for common scenarios (mastitis care, postpartum bleeding instructions, medication questions). Reduces documentation time and ensures consistent advice.
+- **Shift Summary Dashboard:** Statistics view showing total calls, priority breakdown, calls by hour, pending follow-ups. Useful for shift handoff and personal tracking.
+- **Home Screen Widgets:** WidgetKit integration showing pending follow-ups count, quick "new record" button, or recent activity summary.
+
+**Medium Priority — Enhanced Documentation:**
+
+- **Voice Memo Attachment:** Record audio notes and attach to a triage record. Useful for complex cases or when typing is impractical.
+- **Photo Attachments:** Attach images to records (patient-sent photos of rashes, wounds, etc.). Store in app sandbox with record association.
+- **Shift Handoff Mode:** Generate structured handoff notes for the incoming on-call physician. Highlight pending follow-ups, unresolved issues, and high-priority patients.
+- **PDF Export:** Professional-looking PDF export with optional clinic branding/letterhead. More suitable for official documentation than plain text.
+
+**Lower Priority — Platform Integration:**
+
+- **Apple Watch Complication:** Show pending follow-up count at a glance. Quick access to recent records.
+- **Siri Shortcuts Integration:** "Hey Siri, log a triage call" to quickly open new record form.
+- **iPad Layout Optimization:** Multi-column layout for iPad, drag-and-drop support.
+- **Integration with Answering Service APIs:** If available, auto-import messages from specific answering services.
+
+**Research/Experimental:**
+
+- **On-device ML Model:** Train a custom model on user's message patterns for improved parsing accuracy over time.
+- **Call Log Integration:** Detect when a phone call ends and prompt to create a triage record.
 
 ---
 
