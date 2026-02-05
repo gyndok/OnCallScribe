@@ -20,6 +20,9 @@ struct SettingsView: View {
 
     @ObservedObject private var doctorManager = DoctorListManager.shared
 
+    @State private var appLockManager = AppLockManager.shared
+    @State private var isTogglingAppLock = false
+
     private var selectedSpecialty: MedicalSpecialty {
         get { MedicalSpecialty(rawValue: selectedSpecialtyRaw) ?? .other }
         set { selectedSpecialtyRaw = newValue.rawValue }
@@ -48,6 +51,9 @@ struct SettingsView: View {
 
                     // Data Card
                     dataCard
+
+                    // Security Card
+                    securityCard
 
                     // About Card
                     aboutCard
@@ -364,6 +370,84 @@ struct SettingsView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.border, lineWidth: 0.5)
+        )
+    }
+
+    private var securityCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("SECURITY")
+                .sectionHeader()
+
+            VStack(spacing: 12) {
+                HStack {
+                    HStack(spacing: 8) {
+                        Image(systemName: appLockManager.biometricType.icon)
+                            .foregroundColor(appLockManager.isAppLockEnabled ? Color.accentTeal : Color.txtTertiary)
+                        Text("App Lock")
+                            .font(.subheadline)
+                            .foregroundColor(Color.txtSecondary)
+                    }
+
+                    Spacer()
+
+                    if isTogglingAppLock {
+                        ProgressView()
+                            .tint(Color.accentTeal)
+                    } else {
+                        Toggle("", isOn: Binding(
+                            get: { appLockManager.isAppLockEnabled },
+                            set: { newValue in
+                                isTogglingAppLock = true
+                                Task {
+                                    await appLockManager.setAppLockEnabled(newValue)
+                                    await MainActor.run {
+                                        isTogglingAppLock = false
+                                    }
+                                }
+                            }
+                        ))
+                        .tint(Color.accentTeal)
+                        .labelsHidden()
+                    }
+                }
+
+                if appLockManager.isBiometricAvailable {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(Color.prioRoutine)
+                        Text("\(appLockManager.biometricType.name) available")
+                            .font(.caption)
+                            .foregroundColor(Color.txtTertiary)
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundColor(Color.prioUrgent)
+                        Text("Device passcode will be used")
+                            .font(.caption)
+                            .foregroundColor(Color.txtTertiary)
+                    }
+                }
+
+                Divider()
+                    .background(Color.dividerColor)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("When enabled, \(appLockManager.biometricType.name) or your device passcode is required to access the app.")
+                        .font(.caption)
+                        .foregroundColor(Color.txtTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.bgCard)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(appLockManager.isAppLockEnabled ? Color.accentTeal.opacity(0.3) : Color.border, lineWidth: 0.5)
         )
     }
 

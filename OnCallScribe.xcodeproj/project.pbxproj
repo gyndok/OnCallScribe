@@ -28,6 +28,8 @@
 		A1000019 /* MedicalSpecialty.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000019 /* MedicalSpecialty.swift */; };
 		A1000020 /* SearchFilterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000020 /* SearchFilterView.swift */; };
 		A1000021 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A2000021 /* LaunchScreen.storyboard */; };
+		A1000022 /* AppLockManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022 /* AppLockManager.swift */; };
+		A1000023 /* LockScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000023 /* LockScreenView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +54,8 @@
 		A2000019 /* MedicalSpecialty.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MedicalSpecialty.swift; sourceTree = "<group>"; };
 		A2000020 /* SearchFilterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchFilterView.swift; sourceTree = "<group>"; };
 		A2000021 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		A2000022 /* AppLockManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockManager.swift; sourceTree = "<group>"; };
+		A2000023 /* LockScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockScreenView.swift; sourceTree = "<group>"; };
 		A3000001 /* OnCallScribe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OnCallScribe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -126,6 +130,7 @@
 				A2000017 /* OnboardingView.swift */,
 				A2000018 /* SpecialtyPickerView.swift */,
 				A2000020 /* SearchFilterView.swift */,
+				A2000023 /* LockScreenView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -137,6 +142,7 @@
 				A2000007 /* ExportManager.swift */,
 				A2000015 /* AIMessageParser.swift */,
 				A2000016 /* DoctorListManager.swift */,
+				A2000022 /* AppLockManager.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -239,6 +245,8 @@
 				A1000018 /* SpecialtyPickerView.swift in Sources */,
 				A1000019 /* MedicalSpecialty.swift in Sources */,
 				A1000020 /* SearchFilterView.swift in Sources */,
+				A1000022 /* AppLockManager.swift in Sources */,
+				A1000023 /* LockScreenView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -383,6 +391,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "OnCall Scribe uses Face ID to protect your triage records.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -415,6 +424,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "OnCall Scribe uses Face ID to protect your triage records.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
