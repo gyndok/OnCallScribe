@@ -374,6 +374,31 @@ While this architecture does not require a Business Associate Agreement (BAA) si
 - Year 1: 5,000 downloads, 3% conversion = 150 subscribers × $50/year = ~$7,500
 - Year 1 (Optimistic): 15,000 downloads, 5% conversion = 750 subscribers = ~$37,500
 
+**Why No Advertising:**
+
+Advertising was evaluated and ruled out for the following reasons:
+
+| Factor | Issue |
+|--------|-------|
+| Niche audience | Medical professional ad rates are $50-150+ CPM; would need millions of impressions |
+| Low usage frequency | ~5-10 opens per shift, 4-8 shifts/month = insufficient impressions |
+| Revenue math | 1,000 DAU × 5 sessions × $5 CPM ≈ $750/month (equals just 15 subscribers) |
+| Trust erosion | Physicians are bombarded with pharma ads; ad-free is a feature |
+| HIPAA perception | Ad SDKs track users, raising concerns even if technically compliant |
+| Professionalism | Ads in a clinical documentation tool undermines credibility |
+
+**"No ads" as a marketing advantage:**
+
+> *"Your triage data stays on your device. No ads. No analytics. No servers. Just documentation."*
+
+This messaging differentiates OnCallScribe from competitors and resonates with privacy-conscious physicians. The absence of ads reinforces the HIPAA-conscious, professional positioning.
+
+**Free tier limitations (instead of ads):**
+- 50 record limit (encourages upgrade without annoying users)
+- Basic export only (text, not PDF)
+- No quick templates
+- No app lock
+
 ### 9.2 Pre-Launch Phase (Weeks 1-4)
 
 **Week 1-2: Administrative Setup**
