@@ -184,6 +184,7 @@ struct RecordListView: View {
                         Image(systemName: "gearshape")
                             .foregroundColor(Color.txtSecondary)
                     }
+                    .accessibilityLabel("Settings")
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -195,6 +196,7 @@ struct RecordListView: View {
                                 Image(systemName: "square.and.arrow.up")
                                     .foregroundColor(Color.txtSecondary)
                             }
+                            .accessibilityLabel("Export records")
                         }
 
                         Button {
@@ -205,6 +207,7 @@ struct RecordListView: View {
                                 .font(.title2)
                                 .foregroundColor(Color.accentTeal)
                         }
+                        .accessibilityLabel("Add new record")
                     }
                 }
             }
@@ -259,6 +262,7 @@ struct RecordListView: View {
             Image(systemName: "doc.text")
                 .font(.system(size: 64))
                 .foregroundColor(Color.txtTertiary)
+                .accessibilityHidden(true)
 
             Text("No Records")
                 .font(.title2.weight(.semibold))
@@ -268,6 +272,8 @@ struct RecordListView: View {
                 .font(.subheadline)
                 .foregroundColor(Color.txtSecondary)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No records. Tap the add button to create your first triage record.")
     }
 
     private var noResultsView: some View {
@@ -275,6 +281,7 @@ struct RecordListView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 48))
                 .foregroundColor(Color.txtTertiary)
+                .accessibilityHidden(true)
 
             Text("No Matching Records")
                 .font(.title3.weight(.semibold))
@@ -294,6 +301,7 @@ struct RecordListView: View {
                     .foregroundColor(Color.accentTeal)
             }
             .padding(.top, 8)
+            .accessibilityHint("Removes all search text and active filters")
         }
     }
 
@@ -335,9 +343,12 @@ struct RecordListView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(Color.txtTertiary)
+                .accessibilityHidden(true)
 
             TextField("Search records...", text: $searchText)
                 .foregroundColor(Color.txtPrimary)
+                .accessibilityLabel("Search")
+                .accessibilityHint("Search by patient name, doctor, complaint, or tags")
 
             // Filter button
             Button {
@@ -358,9 +369,12 @@ struct RecordListView: View {
                             .background(Color.prioUrgent)
                             .clipShape(Circle())
                             .offset(x: 6, y: -6)
+                            .accessibilityHidden(true)
                     }
                 }
             }
+            .accessibilityLabel(filter.isActive ? "Filters, \(filter.activeFilterCount) active" : "Filters")
+            .accessibilityHint("Opens filter options for date range, priority, and more")
         }
         .padding(12)
         .background(Color.bgSecondary)
@@ -409,6 +423,21 @@ struct RecordCardView: View {
         return formatter
     }
 
+    private var accessibilityDescription: String {
+        var parts: [String] = []
+        parts.append(record.displayName)
+        parts.append("\(record.priorityEnum.rawValue) priority")
+        parts.append(record.chiefComplaintSnippet)
+        parts.append("Received \(dateFormatter.string(from: record.dateReceived))")
+        if record.followUpNeeded {
+            parts.append("Follow-up needed")
+        }
+        if let callback = record.callbackNumber, !callback.isEmpty {
+            parts.append("Callback: \(callback)")
+        }
+        return parts.joined(separator: ". ")
+    }
+
     var body: some View {
         Button {
             // Handled by parent
@@ -418,6 +447,7 @@ struct RecordCardView: View {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(record.priorityEnum.color)
                     .frame(width: 3)
+                    .accessibilityHidden(true)
 
                 // Content
                 VStack(alignment: .leading, spacing: 8) {
@@ -480,6 +510,10 @@ struct RecordCardView: View {
             )
         }
         .buttonStyle(CardPressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
+        .accessibilityHint("Double tap to view details. Long press for more options.")
+        .accessibilityAddTraits(.isButton)
     }
 }
 

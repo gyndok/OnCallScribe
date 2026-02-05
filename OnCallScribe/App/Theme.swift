@@ -85,6 +85,7 @@ extension Color {
 }
 
 // MARK: - Typography
+// All fonts use system text styles for Dynamic Type support
 
 struct MedDarkTypography {
     // List row title
@@ -107,6 +108,19 @@ struct MedDarkTypography {
 
     // Caption
     static let caption = Font.caption
+}
+
+// MARK: - Scaled Metrics for Accessibility
+
+/// Use these for any fixed-size elements that should scale with Dynamic Type
+struct AccessibilityMetrics {
+    @ScaledMetric(relativeTo: .body) static var iconSizeSmall: CGFloat = 16
+    @ScaledMetric(relativeTo: .body) static var iconSizeMedium: CGFloat = 24
+    @ScaledMetric(relativeTo: .body) static var iconSizeLarge: CGFloat = 32
+    @ScaledMetric(relativeTo: .body) static var iconSizeXLarge: CGFloat = 48
+    @ScaledMetric(relativeTo: .body) static var iconSizeHero: CGFloat = 64
+    @ScaledMetric(relativeTo: .caption) static var badgeSize: CGFloat = 16
+    @ScaledMetric(relativeTo: .body) static var minTouchTarget: CGFloat = 44
 }
 
 // MARK: - View Modifiers

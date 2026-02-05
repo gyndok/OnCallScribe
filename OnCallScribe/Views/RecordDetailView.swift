@@ -99,6 +99,7 @@ struct RecordDetailView: View {
             HStack(spacing: 8) {
                 Image(systemName: record.priorityEnum.icon)
                     .font(.title2)
+                    .accessibilityHidden(true)
                 Text(record.priorityEnum.rawValue)
                     .font(.headline.weight(.semibold))
             }
@@ -109,6 +110,7 @@ struct RecordDetailView: View {
             if record.followUpNeeded {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle")
+                        .accessibilityHidden(true)
                     Text("Follow-up")
                 }
                 .font(.caption.weight(.medium))
@@ -123,6 +125,7 @@ struct RecordDetailView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
                     .foregroundColor(Color.prioRoutine)
+                    .accessibilityLabel("Callback completed")
             }
         }
         .padding(16)
@@ -132,6 +135,7 @@ struct RecordDetailView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.border, lineWidth: 0.5)
         )
+        .accessibilityElement(children: .combine)
     }
 
     private var patientInfoCard: some View {
@@ -349,6 +353,7 @@ struct DetailRow: View {
                 Image(systemName: icon)
                     .foregroundColor(Color.txtTertiary)
                     .frame(width: 20)
+                    .accessibilityHidden(true)
                 Text(label)
                     .font(.subheadline)
                     .foregroundColor(Color.txtSecondary)
@@ -364,12 +369,16 @@ struct DetailRow: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(Color.accentTeal)
                 }
+                .accessibilityLabel("\(label): \(value)")
+                .accessibilityHint("Double tap to call")
             } else {
                 Text(value)
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(Color.txtPrimary)
             }
         }
+        .accessibilityElement(children: isTappable ? .contain : .combine)
+        .accessibilityLabel(isTappable ? "" : "\(label): \(value)")
     }
 }
 
