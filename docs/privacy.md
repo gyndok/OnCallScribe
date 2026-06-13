@@ -81,6 +81,7 @@ If we update this privacy policy, we will post the revised version on this page 
 
 For questions about this privacy policy:
 
+- Email: gyndok@gmail.com
 - [Open an issue on GitHub](https://github.com/gyndok/OnCallScribe/issues)
 
 ---

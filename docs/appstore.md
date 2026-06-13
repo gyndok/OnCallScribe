@@ -105,7 +105,7 @@ Changes to This Policy
 If we update this privacy policy, we will post the new version at this URL and update the "Last Updated" date.
 Contact
 If you have questions about this privacy policy, contact:
-[Your email or contact form URL]
+gyndok@gmail.com
 
 Support Page Content
 OnCall Scribe Support
@@ -126,7 +126,7 @@ Q: Does this app replace my EMR documentation?
 A: No. OnCall Scribe is a personal documentation tool to help you track triage encounters during on-call shifts. You should still complete all required documentation in your institution's official medical record system.
 Contact Support
 For bugs, feature requests, or questions:
-Email: [your email]
+Email: gyndok@gmail.com
 GitHub: https://github.com/gyndok/OnCallScribe/issues
 
 App Store Review Notes
@@ -157,7 +157,7 @@ KEY POINTS FOR REVIEW:
    enabled. Basic pattern matching works on all devices as a fallback.
 
 If you have questions about the medical use case or privacy architecture, 
-please contact me at [your email].
+please contact me at gyndok@gmail.com.
 
 App Privacy "Nutrition Label" Selections
 When you fill out App Store Connect's privacy questionnaire, select:

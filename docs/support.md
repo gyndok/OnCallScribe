@@ -17,7 +17,7 @@ Long-press on any record card to open the context menu. From there you can edit,
 ### Why isn't AI parsing working?
 On-device AI parsing requires:
 - **iPhone 15 Pro or later** (A17 Pro chip or newer)
-- **iOS 18.1 or later**
+- **iOS 26 or later**
 - **Apple Intelligence enabled** in Settings > Apple Intelligence & Siri
 
 If these requirements aren't met, the app automatically falls back to a regex-based parser that handles most common message formats.
@@ -65,6 +65,7 @@ OnCall Scribe is designed with HIPAA-conscious principles — all data stays on 
 
 For bug reports, feature requests, or questions:
 
+- Email: gyndok@gmail.com
 - [Open an issue on GitHub](https://github.com/gyndok/OnCallScribe/issues)
 
 ---
