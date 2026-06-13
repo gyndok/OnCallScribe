@@ -80,7 +80,7 @@ Last Updated: February 5, 2026
 Summary
 OnCall Scribe does not collect, store, transmit, or share any personal data or patient health information. All data you enter into the app remains exclusively on your device.
 Data Storage
-All triage records, settings, and preferences are stored locally on your iPhone using Apple's SwiftData framework. Data is encrypted at rest using iOS file protection (NSFileProtectionComplete), meaning it is encrypted whenever your device is locked.
+All triage records, settings, and preferences are stored locally on your iPhone using Apple's SwiftData framework. Data is encrypted at rest by iOS Data Protection, with encryption keys protected by your device passcode; the database remains encrypted until you first unlock your device after a restart.
 No data is stored on external servers, cloud services, or any third-party infrastructure.
 Data Collection
 OnCall Scribe collects no data whatsoever. Specifically:

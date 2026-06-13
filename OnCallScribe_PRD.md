@@ -184,7 +184,7 @@ Follow-up: Yes — Recheck in office Monday AM
 - All data stored in the app's local sandbox
 - No CloudKit sync, no iCloud backup of database (explicitly opt out)
 - No network calls whatsoever — the app should function fully in airplane mode
-- Database file stored in Application Support directory with iOS data protection (NSFileProtectionComplete)
+- Database file stored in Application Support directory with iOS data protection (NSFileProtectionCompleteUntilFirstUserAuthentication, the iOS default — encrypted at rest, keys protected by the device passcode)
 
 **Data Model — TriageRecord:**
 
@@ -287,7 +287,7 @@ This app is designed specifically to avoid HIPAA-regulated data transmission:
 
 1. **No network access:** The app makes zero network calls. No analytics, no crash reporting, no telemetry. It should be possible to verify this by running the app with airplane mode on — full functionality is expected.
 2. **No cloud sync:** SwiftData is configured without CloudKit. iCloud backup of the app's data container should be disabled via the appropriate Info.plist setting.
-3. **On-device encryption:** Leverage iOS file protection (NSFileProtectionComplete) so the database is encrypted when the device is locked.
+3. **On-device encryption:** Leverage iOS Data Protection (NSFileProtectionCompleteUntilFirstUserAuthentication, the default class) so the database is encrypted at rest with keys protected by the device passcode. Full NSFileProtectionComplete is not used because SwiftData does not expose per-store protection options and recreates SQLite sidecar files at the default class; claiming it would overstate the protection actually applied.
 4. **Export is user-initiated:** Data only leaves the device when the user explicitly taps Share. The app never transmits data autonomously.
 5. **No third-party SDKs:** No Firebase, no analytics, no ad networks, no crash reporters. Zero third-party dependencies beyond Apple frameworks.
 6. **App Lock (v1 stretch goal):** Optional Face ID / Touch ID gate on app launch for additional security.
