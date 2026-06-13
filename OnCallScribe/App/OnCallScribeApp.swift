@@ -22,6 +22,9 @@ struct OnCallScribeApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
+            // Never delete the store here: records are the user's only copy.
+            // Future TriageRecord schema changes must ship a VersionedSchema +
+            // SchemaMigrationPlan instead of relying on a destructive reset.
             fatalError("Could not create ModelContainer: \(error)")
         }
     }()
