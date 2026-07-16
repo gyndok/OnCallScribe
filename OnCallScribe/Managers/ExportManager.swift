@@ -45,7 +45,9 @@ final class ExportManager {
             let endFormatter = DateFormatter()
             endFormatter.dateFormat = "d, yyyy"
 
-            if Calendar.current.component(.month, from: firstDate) == Calendar.current.component(.month, from: lastDate) {
+            // Compare year AND month: comparing only .month rendered
+            // "January 2025 – January 2026" as "January 10–5, 2026".
+            if Calendar.current.isDate(firstDate, equalTo: lastDate, toGranularity: .month) {
                 dateRangeString = "\(startFormatter.string(from: firstDate))–\(endFormatter.string(from: lastDate))"
             } else {
                 dateRangeString = "\(dateOnlyFormatter.string(from: firstDate)) – \(dateOnlyFormatter.string(from: lastDate))"

@@ -92,16 +92,14 @@ final class TriageRecord {
         set { specialty = newValue.rawValue }
     }
 
-    var dispositionEnum: Disposition? {
-        get {
-            guard let disposition = disposition else { return nil }
-            return Disposition(rawValue: disposition)
-        }
-        set { disposition = newValue?.rawValue }
-    }
+    // Note: dispositions are stored and filtered as plain strings. The old
+    // dispositionEnum accessor was removed because the Disposition enum's
+    // rawValues no longer match what the form saves, so mapping through it
+    // silently dropped records.
 
     var displayName: String {
-        patientName?.isEmpty == false ? patientName! : "Unknown Patient"
+        let trimmed = patientName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty == false) ? trimmed! : "Unknown Patient"
     }
 
     var chiefComplaintSnippet: String {

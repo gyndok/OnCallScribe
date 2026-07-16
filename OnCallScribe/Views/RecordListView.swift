@@ -25,6 +25,14 @@ struct RecordListView: View {
         return Array(doctors).sorted()
     }
 
+    /// Distinct disposition strings actually stored on records, so filter
+    /// chips always match what the form saved (specialty options, custom text).
+    private var knownDispositions: [String] {
+        let dispositions = Set(records.compactMap { $0.disposition?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty })
+        return Array(dispositions).sorted()
+    }
+
     private var filteredRecords: [TriageRecord] {
         var result = records
 
@@ -54,10 +62,11 @@ struct RecordListView: View {
             result = result.filter { filter.priorities.contains($0.priorityEnum) }
         }
 
-        // Apply disposition filter
+        // Apply disposition filter (matches the stored strings directly —
+        // the old Disposition enum's rawValues matched nothing the form saves)
         if !filter.dispositions.isEmpty {
             result = result.filter { record in
-                guard let disposition = record.dispositionEnum else { return false }
+                guard let disposition = record.disposition, !disposition.isEmpty else { return false }
                 return filter.dispositions.contains(disposition)
             }
         }
@@ -84,6 +93,9 @@ struct RecordListView: View {
                     emptyStateView
                 } else {
                     ScrollView {
+                        // Evaluate the filter pipeline once per render instead
+                        // of three times (isEmpty, ForEach, count).
+                        let visibleRecords = filteredRecords
                         LazyVStack(spacing: 12) {
                             // Search bar
                             searchBar
@@ -92,18 +104,18 @@ struct RecordListView: View {
 
                             // Active filters indicator
                             if filter.isActive {
-                                activeFiltersIndicator
+                                activeFiltersIndicator(filteredCount: visibleRecords.count)
                                     .padding(.horizontal, 16)
                             }
 
                             // No results message
-                            if filteredRecords.isEmpty {
+                            if visibleRecords.isEmpty {
                                 noResultsView
                                     .padding(.top, 40)
                             }
 
                             // Record cards
-                            ForEach(filteredRecords) { record in
+                            ForEach(visibleRecords) { record in
                                 RecordCardView(record: record)
                                     .padding(.horizontal, 16)
                                     .onTapGesture {
@@ -235,7 +247,11 @@ struct RecordListView: View {
                 }
             }
             .sheet(isPresented: $showingFilters) {
-                SearchFilterView(filter: $filter, knownDoctors: knownDoctors)
+                SearchFilterView(
+                    filter: $filter,
+                    knownDoctors: knownDoctors,
+                    knownDispositions: knownDispositions
+                )
             }
             .alert("Delete this triage record?", isPresented: $showingDeleteAlert) {
                 Button("Cancel", role: .cancel) {
@@ -245,6 +261,7 @@ struct RecordListView: View {
                     if let record = recordToDelete {
                         HapticFeedback.notification(.warning)
                         modelContext.delete(record)
+                        try? modelContext.save()
                         recordToDelete = nil
                     }
                 }
@@ -305,7 +322,7 @@ struct RecordListView: View {
         }
     }
 
-    private var activeFiltersIndicator: some View {
+    private func activeFiltersIndicator(filteredCount: Int) -> some View {
         HStack {
             Image(systemName: "line.3.horizontal.decrease.circle.fill")
                 .foregroundColor(Color.accentTeal)
@@ -318,7 +335,7 @@ struct RecordListView: View {
             Text("·")
                 .foregroundColor(Color.txtTertiary)
 
-            Text("\(filteredRecords.count) of \(records.count) records")
+            Text("\(filteredCount) of \(records.count) records")
                 .font(.caption)
                 .foregroundColor(Color.txtTertiary)
 
@@ -397,16 +414,9 @@ struct RecordListView: View {
     }
 
     private func callPhoneNumber(_ number: String) {
-        // Clean the phone number - remove non-numeric characters except +
-        let cleaned = number.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
-        guard !cleaned.isEmpty,
-              let url = URL(string: "tel://\(cleaned)") else {
-            return
-        }
-
-        if UIApplication.shared.canOpenURL(url) {
-            HapticFeedback.impact(.light)
-            UIApplication.shared.open(url)
+        HapticFeedback.impact(.light)
+        if !PhoneDialer.call(number) {
+            HapticFeedback.error()
         }
     }
 }

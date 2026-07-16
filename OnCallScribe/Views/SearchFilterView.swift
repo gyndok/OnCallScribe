@@ -4,7 +4,10 @@ struct RecordFilter: Equatable {
     var startDate: Date?
     var endDate: Date?
     var priorities: Set<Priority> = []
-    var dispositions: Set<Disposition> = []
+    /// Disposition filter matches the exact strings records are saved with
+    /// (specialty-specific options or custom "Other" text) — the old
+    /// Disposition enum's rawValues no longer matched anything the form saves.
+    var dispositions: Set<String> = []
     var followUpNeeded: Bool?
     var attendingDoctor: String?
 
@@ -43,6 +46,9 @@ struct SearchFilterView: View {
     @Environment(\.dismiss) private var dismiss
 
     let knownDoctors: [String]
+    /// Distinct disposition strings that actually occur in the user's records,
+    /// so every chip is guaranteed to match at least one record.
+    let knownDispositions: [String]
 
     @State private var showStartDatePicker = false
     @State private var showEndDatePicker = false
@@ -59,24 +65,28 @@ struct SearchFilterView: View {
                         // Date Range Section
                         filterSection(title: "DATE RANGE") {
                             VStack(spacing: 12) {
-                                // Start Date
+                                // Start Date — normalized to the start of the
+                                // picked day so the whole day is included
                                 dateFilterRow(
                                     label: "From",
                                     date: filter.startDate,
                                     showPicker: $showStartDatePicker,
                                     tempDate: $tempStartDate
                                 ) { date in
-                                    filter.startDate = date
+                                    filter.startDate = date.map { Calendar.current.startOfDay(for: $0) }
                                 }
 
-                                // End Date
+                                // End Date — normalized to the end of the
+                                // picked day; comparing the raw picker value
+                                // (which carries a wall-clock time) silently
+                                // excluded most of the "To" day's records
                                 dateFilterRow(
                                     label: "To",
                                     date: filter.endDate,
                                     showPicker: $showEndDatePicker,
                                     tempDate: $tempEndDate
                                 ) { date in
-                                    filter.endDate = date
+                                    filter.endDate = date.map(Self.endOfDay)
                                 }
                             }
                         }
@@ -109,10 +119,12 @@ struct SearchFilterView: View {
                         }
 
                         // Disposition Section
-                        filterSection(title: "DISPOSITION") {
-                            FlowLayout(spacing: 8) {
-                                ForEach(Disposition.allCases) { disposition in
-                                    dispositionToggle(disposition)
+                        if !knownDispositions.isEmpty {
+                            filterSection(title: "DISPOSITION") {
+                                FlowLayout(spacing: 8) {
+                                    ForEach(knownDispositions, id: \.self) { disposition in
+                                        dispositionToggle(disposition)
+                                    }
                                 }
                             }
                         }
@@ -218,6 +230,12 @@ struct SearchFilterView: View {
                     Button {
                         tempDate.wrappedValue = date ?? Date()
                         showPicker.wrappedValue.toggle()
+                        // Commit immediately: if the user then taps the
+                        // already-selected day (e.g. today), onChange never
+                        // fires and no filter would be applied.
+                        if showPicker.wrappedValue {
+                            onSet(tempDate.wrappedValue)
+                        }
                     } label: {
                         Text("Select")
                             .foregroundColor(Color.accentTeal)
@@ -292,7 +310,7 @@ struct SearchFilterView: View {
         }
     }
 
-    private func dispositionToggle(_ disposition: Disposition) -> some View {
+    private func dispositionToggle(_ disposition: String) -> some View {
         let isSelected = filter.dispositions.contains(disposition)
 
         return Button {
@@ -303,7 +321,7 @@ struct SearchFilterView: View {
                 filter.dispositions.insert(disposition)
             }
         } label: {
-            Text(disposition.rawValue)
+            Text(disposition)
                 .font(.caption.weight(.medium))
                 .foregroundColor(isSelected ? .white : Color.txtSecondary)
                 .padding(.horizontal, 12)
@@ -389,6 +407,14 @@ struct SearchFilterView: View {
 
     // MARK: - Date Helpers
 
+    static func endOfDay(_ date: Date) -> Date {
+        let start = Calendar.current.startOfDay(for: date)
+        return Calendar.current.date(byAdding: DateComponents(day: 1, second: -1), to: start) ?? date
+    }
+
+    /// Presets set only a start bound. A frozen `endDate = now` excluded every
+    /// record created after the preset was tapped — a "Today" filter that
+    /// hides today's newest calls.
     private func setDateRange(days: Int) {
         let calendar = Calendar.current
         let now = Date()
@@ -396,32 +422,31 @@ struct SearchFilterView: View {
         if days == 0 {
             // Today
             filter.startDate = calendar.startOfDay(for: now)
-            filter.endDate = now
         } else {
             filter.startDate = calendar.date(byAdding: .day, value: -days, to: now)
-            filter.endDate = now
         }
+        filter.endDate = nil
     }
 
+    /// The most recent on-call weekend: Friday 5pm through Monday 7am.
     private func setWeekendRange() {
         let calendar = Calendar.current
         let now = Date()
-        let weekday = calendar.component(.weekday, from: now)
+        let weekday = calendar.component(.weekday, from: now) // Sun=1 ... Sat=7
 
-        // Find last Friday 5pm
-        let daysToLastFriday = (weekday + 1) % 7 + 1
-        var startDate = calendar.date(byAdding: .day, value: -daysToLastFriday, to: now)!
-        startDate = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: startDate)!
+        // Days back to the most recent Friday (0 on Friday itself).
+        let daysBackToFriday = (weekday + 1) % 7
+        let friday = calendar.date(byAdding: .day, value: -daysBackToFriday, to: now)!
+        var startDate = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: friday)!
 
-        // Find Monday 7am
-        let daysToMonday = (9 - weekday) % 7
-        var endDate = calendar.date(byAdding: .day, value: daysToMonday, to: now)!
-        endDate = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: endDate)!
-
-        // If we're past Monday 7am, use current time as end
-        if now > endDate {
-            endDate = now
+        // On Friday before 5pm the weekend hasn't started — use last weekend.
+        if startDate > now {
+            startDate = calendar.date(byAdding: .day, value: -7, to: startDate)!
         }
+
+        // The weekend ends the following Monday at 7am.
+        let monday = calendar.date(byAdding: .day, value: 3, to: startDate)!
+        let endDate = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: monday)!
 
         filter.startDate = startDate
         filter.endDate = endDate
@@ -480,6 +505,7 @@ struct FlowLayout: Layout {
 #Preview {
     SearchFilterView(
         filter: .constant(RecordFilter()),
-        knownDoctors: ["Dr. Smith", "Dr. Jones", "Dr. LaBerge"]
+        knownDoctors: ["Dr. Smith", "Dr. Jones", "Dr. LaBerge"],
+        knownDispositions: ["Sent to ER", "Advised home care", "Called in Rx"]
     )
 }

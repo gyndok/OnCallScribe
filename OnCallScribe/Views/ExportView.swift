@@ -15,13 +15,36 @@ struct ExportView: View {
     @State private var selectedRecordIDs: Set<UUID> = []
     @State private var showingRecordList = false
 
+    /// Filters on the exact bounds. Presets set precise times (e.g. "24 Hours"
+    /// = now minus 24h); rounding those to day boundaries here used to stretch
+    /// a 24-hour handoff export to as much as 48 hours of records. Manual
+    /// picker selections are day-normalized where they're set.
     private var dateFilteredRecords: [TriageRecord] {
-        let startOfDay = Calendar.current.startOfDay(for: startDate)
-        let endOfDay = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
-
-        return records.filter { record in
-            record.dateReceived >= startOfDay && record.dateReceived <= endOfDay
+        records.filter { record in
+            record.dateReceived >= startDate && record.dateReceived <= endDate
         }.sorted { $0.dateReceived > $1.dateReceived }
+    }
+
+    /// Bindings for the manual date pickers: a picked "day" carries the
+    /// wall-clock time the picker was opened, so normalize the start to
+    /// 00:00:00 and the end to 23:59:59 of the chosen day.
+    private var startDateBinding: Binding<Date> {
+        Binding(
+            get: { startDate },
+            set: { startDate = Calendar.current.startOfDay(for: $0) }
+        )
+    }
+
+    private var endDateBinding: Binding<Date> {
+        Binding(
+            get: { endDate },
+            set: { endDate = Self.endOfDay($0) }
+        )
+    }
+
+    private static func endOfDay(_ date: Date) -> Date {
+        let start = Calendar.current.startOfDay(for: date)
+        return Calendar.current.date(byAdding: DateComponents(day: 1, second: -1), to: start) ?? date
     }
 
     private var recordsToExport: [TriageRecord] {
@@ -180,7 +203,7 @@ struct ExportView: View {
                             .foregroundColor(Color.txtSecondary)
                     }
                     Spacer()
-                    DatePicker("", selection: $startDate, displayedComponents: .date)
+                    DatePicker("", selection: startDateBinding, displayedComponents: .date)
                         .labelsHidden()
                         .tint(Color.accentTeal)
                 }
@@ -197,7 +220,7 @@ struct ExportView: View {
                             .foregroundColor(Color.txtSecondary)
                     }
                     Spacer()
-                    DatePicker("", selection: $endDate, displayedComponents: .date)
+                    DatePicker("", selection: endDateBinding, displayedComponents: .date)
                         .labelsHidden()
                         .tint(Color.accentTeal)
                 }
@@ -499,26 +522,39 @@ struct ExportView: View {
         let now = Date()
 
         if days == 0 {
+            // Today: the whole calendar day, so records added while the
+            // export sheet is open are still included.
             startDate = calendar.startOfDay(for: now)
-            endDate = now
+            endDate = Self.endOfDay(now)
         } else {
+            // Trailing window (24 Hours / This Week): exact, not day-rounded.
             startDate = calendar.date(byAdding: .day, value: -days, to: now) ?? now
             endDate = now
         }
     }
 
+    /// The most recent on-call weekend: Friday 5pm through Monday 7am.
     private func setWeekendRange() {
         let calendar = Calendar.current
         let now = Date()
-        let weekday = calendar.component(.weekday, from: now)
+        let weekday = calendar.component(.weekday, from: now) // Sun=1 ... Sat=7
 
-        // Find last Friday 5pm
-        let daysToLastFriday = (weekday + 1) % 7 + 1
-        var start = calendar.date(byAdding: .day, value: -daysToLastFriday, to: now)!
-        start = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: start)!
+        // Days back to the most recent Friday (0 on Friday itself).
+        let daysBackToFriday = (weekday + 1) % 7
+        let friday = calendar.date(byAdding: .day, value: -daysBackToFriday, to: now)!
+        var start = calendar.date(bySettingHour: 17, minute: 0, second: 0, of: friday)!
+
+        // On Friday before 5pm the weekend hasn't started — use last weekend.
+        if start > now {
+            start = calendar.date(byAdding: .day, value: -7, to: start)!
+        }
+
+        // The weekend ends the following Monday at 7am.
+        let monday = calendar.date(byAdding: .day, value: 3, to: start)!
+        let end = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: monday)!
 
         startDate = start
-        endDate = now
+        endDate = end
     }
 
     private func setAllRecords() {
