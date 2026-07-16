@@ -9,6 +9,55 @@ struct ParsedMessage {
     var chiefComplaint: String?
 }
 
+/// Shared DOB parsing used by both the regex and AI parsers.
+enum TriageDateParser {
+    /// Fixed Gregorian calendar so DOBs are interpreted correctly regardless of
+    /// the device's calendar setting (Buddhist, Japanese, etc.).
+    static let gregorian = Calendar(identifier: .gregorian)
+
+    /// Parses "M/D/YYYY" or "M-D-YY" style date strings.
+    ///
+    /// Two-digit years resolve to the most recent matching date that is not in
+    /// the future: "26" is 2026 if that day has already occurred (a newborn),
+    /// otherwise 1926. Impossible dates (e.g. 9/31) are rejected instead of
+    /// rolling over to the next month.
+    static func parseDate(_ dateString: String) -> Date? {
+        let separators = CharacterSet(charactersIn: "/-")
+        let components = dateString.components(separatedBy: separators)
+
+        guard components.count == 3,
+              let month = Int(components[0]),
+              let day = Int(components[1]),
+              let rawYear = Int(components[2]) else {
+            return nil
+        }
+
+        let now = Date()
+        let currentYear = gregorian.component(.year, from: now)
+
+        func build(year: Int) -> Date? {
+            var dateComponents = DateComponents()
+            dateComponents.calendar = gregorian
+            dateComponents.year = year
+            dateComponents.month = month
+            dateComponents.day = day
+            guard year >= 1900, year <= currentYear,
+                  dateComponents.isValidDate,
+                  let date = gregorian.date(from: dateComponents),
+                  date <= now else {
+                return nil
+            }
+            return date
+        }
+
+        if rawYear < 100 {
+            // Prefer the 2000s interpretation when it isn't in the future.
+            return build(year: 2000 + rawYear) ?? build(year: 1900 + rawYear)
+        }
+        return build(year: rawYear)
+    }
+}
+
 final class MessageParser {
 
     static let shared = MessageParser()
@@ -106,11 +155,15 @@ final class MessageParser {
     // MARK: - Phone Number Extraction
 
     private func extractPhoneNumber(from text: String) -> (number: String, remainingText: String)? {
-        // Match various phone formats: (###) ###-####, ###-###-####, ##########
+        // Match various phone formats: 1##########, (###) ###-####, ###-###-####, ##########
+        // The 11-digit leading-1 pattern must come first so a country code isn't
+        // split into a wrong 10-digit number, and the digit lookarounds keep a
+        // pattern from matching the middle of a longer digit run.
         let patterns = [
-            #"\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}"#,
-            #"\d{3}[-.\s]\d{3}[-.\s]\d{4}"#,
-            #"\d{10}"#
+            #"(?<!\d)1[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?!\d)"#,
+            #"(?<!\d)\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?!\d)"#,
+            #"(?<!\d)\d{3}[-.\s]\d{3}[-.\s]\d{4}(?!\d)"#,
+            #"(?<!\d)\d{10}(?!\d)"#
         ]
 
         for pattern in patterns {
@@ -136,7 +189,11 @@ final class MessageParser {
     }
 
     private func formatPhoneNumber(_ raw: String) -> String {
-        let digits = raw.filter { $0.isNumber }
+        var digits = raw.filter { $0.isNumber }
+        // Drop a leading US country code so 1-832-555-1234 formats as (832) 555-1234
+        if digits.count == 11 && digits.hasPrefix("1") {
+            digits.removeFirst()
+        }
         guard digits.count == 10 else { return raw }
 
         let areaCode = digits.prefix(3)
@@ -171,50 +228,15 @@ final class MessageParser {
         return (date, remainingText)
     }
 
-    /// Parses a date string, properly handling two-digit years.
-    /// - YY <= 25 → 20YY (e.g., 25 → 2025, 01 → 2001)
-    /// - YY > 25 → 19YY (e.g., 97 → 1997, 85 → 1985)
+    /// Parses a date string, delegating to the shared parser for correct
+    /// two-digit-year, calendar, and validity handling.
     private func parseDateWithTwoDigitYearSupport(_ dateString: String) -> Date? {
-        // First, try to parse with explicit components to handle 2-digit years correctly
-        let separators = CharacterSet(charactersIn: "/-")
-        let components = dateString.components(separatedBy: separators)
-
-        guard components.count == 3,
-              let month = Int(components[0]),
-              let day = Int(components[1]),
-              var year = Int(components[2]) else {
-            return nil
-        }
-
-        // Handle two-digit years
-        if year < 100 {
-            if year <= 25 {
-                year = 2000 + year  // 00-25 → 2000-2025
-            } else {
-                year = 1900 + year  // 26-99 → 1926-1999
-            }
-        }
-
-        // Validate ranges
-        guard month >= 1 && month <= 12,
-              day >= 1 && day <= 31,
-              year >= 1900 && year <= Calendar.current.component(.year, from: Date()) else {
-            return nil
-        }
-
-        // Create date from components
-        var dateComponents = DateComponents()
-        dateComponents.month = month
-        dateComponents.day = day
-        dateComponents.year = year
-
-        return Calendar.current.date(from: dateComponents)
+        TriageDateParser.parseDate(dateString)
     }
 
     // MARK: - OB Status Extraction
 
     private func extractOBStatus(from text: String) -> (status: String, remainingText: String)? {
-        let upperText = text.uppercased()
         var status: String?
         var matchedRange: Range<String.Index>?
 
@@ -228,30 +250,37 @@ final class MessageParser {
             status = "Postpartum \(weeks) weeks"
             matchedRange = fullRange
         }
-        // Check for "NOT OB"
-        else if let range = upperText.range(of: "NOT OB") {
+        // Check for "NOT OB" (case-insensitive search directly on the original
+        // string — mapping offsets from an uppercased copy is unsafe because
+        // uppercasing can change character counts)
+        else if let range = text.range(of: "NOT OB", options: .caseInsensitive) {
             status = "Not OB"
-            let startIndex = text.index(text.startIndex, offsetBy: upperText.distance(from: upperText.startIndex, to: range.lowerBound))
-            let endIndex = text.index(text.startIndex, offsetBy: upperText.distance(from: upperText.startIndex, to: range.upperBound))
-            matchedRange = startIndex..<endIndex
+            matchedRange = range
         }
         // Check for "OB" alone
-        else if let range = upperText.range(of: "\\bOB\\b", options: .regularExpression) {
+        else if let range = text.range(of: #"\bOB\b"#, options: [.regularExpression, .caseInsensitive]) {
             status = "OB"
-            let startIndex = text.index(text.startIndex, offsetBy: upperText.distance(from: upperText.startIndex, to: range.lowerBound))
-            let endIndex = text.index(text.startIndex, offsetBy: upperText.distance(from: upperText.startIndex, to: range.upperBound))
-            matchedRange = startIndex..<endIndex
+            matchedRange = range
         }
-        // Check for gestational age
+        // Check for gestational age — requires explicit pregnancy context
+        // (GA/GESTATION suffix or PREGNANT nearby) so symptom durations like
+        // "bleeding for 3 weeks" are not misread as a pregnancy.
         else {
-            let gaPattern = #"(\d{1,2})\s*(?:WKS?|WEEKS?)\s*(?:GA|GESTATION)?"#
-            if let regex = try? NSRegularExpression(pattern: gaPattern, options: .caseInsensitive),
-               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-               let weeksRange = Range(match.range(at: 1), in: text),
-               let fullRange = Range(match.range, in: text) {
-                let weeks = String(text[weeksRange])
-                status = "\(weeks) weeks GA"
-                matchedRange = fullRange
+            let gaPatterns = [
+                #"(\d{1,2})\s*(?:WKS?|WEEKS?)\s*(?:GA\b|GESTATION\w*)"#,
+                #"PREGNANT\s*[,@]?\s*(\d{1,2})\s*(?:WKS?|WEEKS?)"#,
+                #"(\d{1,2})\s*(?:WKS?|WEEKS?)\s*PREGNANT"#
+            ]
+            for gaPattern in gaPatterns {
+                if let regex = try? NSRegularExpression(pattern: gaPattern, options: .caseInsensitive),
+                   let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                   let weeksRange = Range(match.range(at: 1), in: text),
+                   let fullRange = Range(match.range, in: text) {
+                    let weeks = String(text[weeksRange])
+                    status = "\(weeks) weeks GA"
+                    matchedRange = fullRange
+                    break
+                }
             }
         }
 
@@ -312,11 +341,14 @@ final class MessageParser {
         // Find text after "DR [NAME]" and before phone/DOB patterns
         // Allow for various separators and formats
         let escapedDoctor = NSRegularExpression.escapedPattern(for: doctorName.uppercased())
+        // Names are capped at 2-3 words with a lazy quantifier so the capture
+        // stops at the shortest plausible name instead of greedily absorbing
+        // chief-complaint words that follow.
         let patterns = [
             // DR NAME followed by patient name, then phone or DOB
-            #"DR\.?\s+"# + escapedDoctor + #"\s+([A-Z][A-Z'-]+(?:\s+[A-Z][A-Z'-]+)+)(?=\s*\(?\d{3}|\s*DOB|\s*,\s*,|$)"#,
+            #"DR\.?\s+"# + escapedDoctor + #"\s+([A-Z][A-Z'-]+(?:\s+[A-Z][A-Z'-]+){1,2}?)(?=\s*\(?\d{3}|\s*DOB|\s*,\s*,|$)"#,
             // DR NAME with comma separator
-            #"DR\.?\s+"# + escapedDoctor + #",?\s*([A-Z][A-Z'-]+(?:\s+[A-Z][A-Z'-]+)+)"#
+            #"DR\.?\s+"# + escapedDoctor + #",?\s*([A-Z][A-Z'-]+(?:\s+[A-Z][A-Z'-]+){1,2}?)"#
         ]
 
         for pattern in patterns {

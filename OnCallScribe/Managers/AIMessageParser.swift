@@ -17,7 +17,7 @@ struct ParsedTriageMessage {
     @Guide(description: "The callback phone number, formatted as (###) ###-####. Remove any special characters like § before the number.")
     var callbackNumber: String?
 
-    @Guide(description: "Date of birth in MM/DD/YYYY format (four-digit year). If the source has a two-digit year, convert it: YY <= 25 becomes 20YY (e.g., 01 → 2001), YY > 25 becomes 19YY (e.g., 97 → 1997).")
+    @Guide(description: "Date of birth exactly as written in the source, e.g. MM/DD/YYYY or MM/DD/YY. Do not convert two-digit years to four digits — leave them as-is.")
     var dateOfBirth: String?
 
     @Guide(description: "The patient's chief complaint and symptoms. Clean up abbreviations, fix misspellings, normalize spacing, convert to sentence case. Remove any field labels.")
@@ -49,66 +49,31 @@ extension ParsedTriageMessage {
         return Self.parseDateWithTwoDigitYearSupport(dobString)
     }
 
-    /// Parses a date string, properly handling two-digit years.
-    /// - YY <= 25 → 20YY (e.g., 25 → 2025, 01 → 2001)
-    /// - YY > 25 → 19YY (e.g., 97 → 1997, 85 → 1985)
+    /// Parses a date string via the shared parser, which handles two-digit
+    /// years, non-Gregorian device calendars, and impossible dates correctly.
     static func parseDateWithTwoDigitYearSupport(_ dateString: String) -> Date? {
-        // Parse the date string into components
-        let separators = CharacterSet(charactersIn: "/-")
-        let components = dateString.components(separatedBy: separators)
-
-        guard components.count == 3,
-              let month = Int(components[0]),
-              let day = Int(components[1]),
-              var year = Int(components[2]) else {
-            return nil
-        }
-
-        // Handle two-digit years
-        if year < 100 {
-            if year <= 25 {
-                year = 2000 + year  // 00-25 → 2000-2025
-            } else {
-                year = 1900 + year  // 26-99 → 1926-1999
-            }
-        }
-
-        // Validate ranges
-        guard month >= 1 && month <= 12,
-              day >= 1 && day <= 31,
-              year >= 1900 && year <= Calendar.current.component(.year, from: Date()) else {
-            return nil
-        }
-
-        // Create date from components
-        var dateComponents = DateComponents()
-        dateComponents.month = month
-        dateComponents.day = day
-        dateComponents.year = year
-
-        return Calendar.current.date(from: dateComponents)
+        TriageDateParser.parseDate(dateString)
     }
 }
 
 // MARK: - AI Message Parser (with Foundation Models)
 
+@MainActor
 final class AIMessageParser {
     static let shared = AIMessageParser()
 
-    private var session: LanguageModelSession?
-    private var currentSpecialty: MedicalSpecialty?
-    private var _isAvailable: Bool?
+    private var _isAvailable = false
 
     private init() {}
 
     var isAvailable: Bool {
-        if let cached = _isAvailable {
-            return cached
-        }
-        // Check synchronously but safely
-        let availability = SystemLanguageModel.default.availability
-        _isAvailable = (availability == .available)
-        return _isAvailable ?? false
+        // Only cache the affirmative result. Transient states (e.g. the model
+        // still downloading at launch) are re-checked on every access so AI
+        // parsing recovers once the model becomes ready, instead of staying
+        // disabled for the rest of the session.
+        if _isAvailable { return true }
+        _isAvailable = (SystemLanguageModel.default.availability == .available)
+        return _isAvailable
     }
 
     var statusMessage: String {
@@ -127,16 +92,7 @@ final class AIMessageParser {
         }
     }
 
-    private func setupSession(for specialty: MedicalSpecialty) {
-        // Reset session if specialty changed
-        if currentSpecialty != specialty {
-            session = nil
-        }
-
-        guard session == nil else { return }
-
-        currentSpecialty = specialty
-
+    private func makeSession(for specialty: MedicalSpecialty) -> LanguageModelSession {
         let baseInstructions = specialty.parserInstructions + """
 
             Message format is typically: DR [DOCTOR] [PATIENT NAME] [PHONE] DOB [DATE] [COMPLAINT]
@@ -146,7 +102,7 @@ final class AIMessageParser {
             Names may be 2-3 words (First Last or First Middle Last).
             """
 
-        session = LanguageModelSession(instructions: baseInstructions)
+        return LanguageModelSession(instructions: baseInstructions)
     }
 
     func parse(_ rawMessage: String, specialty: MedicalSpecialty = .other) async throws -> ParsedTriageMessage {
@@ -154,11 +110,11 @@ final class AIMessageParser {
             throw AIParserError.modelUnavailable
         }
 
-        setupSession(for: specialty)
-
-        guard let session = session else {
-            throw AIParserError.modelUnavailable
-        }
+        // Each parse gets its own session: parses are independent single-turn
+        // requests, and per-call sessions eliminate the data race of two
+        // overlapping parses (or a mid-flight specialty change) sharing one
+        // LanguageModelSession.
+        let session = makeSession(for: specialty)
 
         let response = try await session.respond(
             to: "Parse this triage message:\n\n\(rawMessage)",
@@ -191,38 +147,14 @@ struct ParsedTriageMessage {
         return Self.parseDateWithTwoDigitYearSupport(dobString)
     }
 
-    /// Parses a date string, properly handling two-digit years.
+    /// Parses a date string via the shared parser, which handles two-digit
+    /// years, non-Gregorian device calendars, and impossible dates correctly.
     static func parseDateWithTwoDigitYearSupport(_ dateString: String) -> Date? {
-        let separators = CharacterSet(charactersIn: "/-")
-        let components = dateString.components(separatedBy: separators)
-
-        guard components.count == 3,
-              let month = Int(components[0]),
-              let day = Int(components[1]),
-              var year = Int(components[2]) else {
-            return nil
-        }
-
-        // Handle two-digit years: <= 25 → 20YY, > 25 → 19YY
-        if year < 100 {
-            year = year <= 25 ? 2000 + year : 1900 + year
-        }
-
-        guard month >= 1 && month <= 12,
-              day >= 1 && day <= 31,
-              year >= 1900 && year <= Calendar.current.component(.year, from: Date()) else {
-            return nil
-        }
-
-        var dateComponents = DateComponents()
-        dateComponents.month = month
-        dateComponents.day = day
-        dateComponents.year = year
-
-        return Calendar.current.date(from: dateComponents)
+        TriageDateParser.parseDate(dateString)
     }
 }
 
+@MainActor
 final class AIMessageParser {
     static let shared = AIMessageParser()
 
