@@ -34,8 +34,9 @@ enum MedicalSpecialty: String, CaseIterable, Identifiable, Codable {
         case .generalSurgery: return "scissors"
         case .urology: return "drop"
         case .pulmonology: return "lungs"
-        case .gastroenterology: return "stomach"
-        case .nephrology: return "kidney"
+        // "stomach" and "kidney" are not valid SF Symbols and rendered blank
+        case .gastroenterology: return "pill.fill"
+        case .nephrology: return "drop.halffull"
         case .oncology: return "cross.vial"
         case .other: return "stethoscope"
         }

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -12,8 +13,11 @@ struct SettingsView: View {
 
     @State private var showingExportAllAlert = false
     @State private var showingDeleteAllAlert = false
-    @State private var exportedJSON: String?
+    @State private var exportFileURL: URL?
     @State private var showingShareSheet = false
+    @State private var showingImporter = false
+    @State private var importResultMessage = ""
+    @State private var showingImportResult = false
     @State private var showingAddDoctor = false
     @State private var newDoctorName = ""
     @State private var showingSpecialtyPicker = false
@@ -81,10 +85,24 @@ struct SettingsView: View {
         } message: {
             Text("This will permanently delete all \(allRecords.count) triage records. This cannot be undone.")
         }
-        .sheet(isPresented: $showingShareSheet) {
-            if let json = exportedJSON {
-                ShareSheet(items: [json])
+        .sheet(isPresented: $showingShareSheet, onDismiss: cleanUpExportFile) {
+            if let url = exportFileURL {
+                // Share a named .json file URL, not a raw string: an inline
+                // string pastes the entire PHI dataset into a Messages/Mail
+                // preview and saves as an extension-less blob.
+                ShareSheet(items: [url])
             }
+        }
+        .fileImporter(
+            isPresented: $showingImporter,
+            allowedContentTypes: [.json]
+        ) { result in
+            importData(from: result)
+        }
+        .alert("Import", isPresented: $showingImportResult) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importResultMessage)
         }
         .preferredColorScheme(.dark)
     }
@@ -352,6 +370,23 @@ struct SettingsView: View {
                     .background(Color.dividerColor)
 
                 Button {
+                    showingImporter = true
+                } label: {
+                    HStack {
+                        Image(systemName: "square.and.arrow.down")
+                        Text("Import Data (JSON)")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(Color.accentTeal)
+                }
+
+                Divider()
+                    .background(Color.dividerColor)
+
+                Button {
                     showingDeleteAllAlert = true
                 } label: {
                     HStack {
@@ -550,12 +585,105 @@ struct SettingsView: View {
         }
 
         do {
-            let jsonData = try encoder.encode(exportData)
-            exportedJSON = String(data: jsonData, encoding: .utf8)
+            let backup = TriageBackup(exportDate: Date(), records: exportData)
+            let jsonData = try encoder.encode(backup)
+
+            // Write to a named temp file so the share sheet offers a proper
+            // .json document instead of pasting PHI inline as message text.
+            let dayFormatter = DateFormatter()
+            dayFormatter.dateFormat = "yyyy-MM-dd"
+            let filename = "OnCallScribe-Backup-\(dayFormatter.string(from: Date())).json"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+            try jsonData.write(to: url, options: [.atomic, .completeFileProtection])
+
+            exportFileURL = url
             showingShareSheet = true
         } catch {
-            print("Failed to encode records: \(error)")
+            importResultMessage = "Export failed: \(error.localizedDescription)"
+            showingImportResult = true
         }
+    }
+
+    /// Remove the temp backup file once the share sheet closes so PHI doesn't
+    /// linger on disk.
+    private func cleanUpExportFile() {
+        if let url = exportFileURL {
+            try? FileManager.default.removeItem(at: url)
+            exportFileURL = nil
+        }
+    }
+
+    private func importData(from result: Result<URL, Error>) {
+        do {
+            let url = try result.get()
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessing { url.stopAccessingSecurityScopedResource() }
+            }
+
+            let data = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+
+            // Current versioned envelope, with a fallback for exports made
+            // before the schemaVersion wrapper existed (a bare array).
+            let exports: [RecordExport]
+            if let backup = try? decoder.decode(TriageBackup.self, from: data) {
+                exports = backup.records
+            } else {
+                exports = try decoder.decode([RecordExport].self, from: data)
+            }
+
+            // Skip records that already exist so re-importing a backup
+            // doesn't duplicate anything.
+            let existingIDs = Set(allRecords.map { $0.id.uuidString })
+            var imported = 0
+            for export in exports where !existingIDs.contains(export.id) {
+                let record = TriageRecord(
+                    rawMessage: export.rawMessage,
+                    attendingDoctor: export.attendingDoctor,
+                    patientName: export.patientName,
+                    callbackNumber: export.callbackNumber,
+                    dateOfBirth: export.dateOfBirth,
+                    obStatus: export.obStatus,
+                    chiefComplaint: export.chiefComplaint,
+                    specialty: MedicalSpecialty(rawValue: export.specialty) ?? .other,
+                    patientAge: export.patientAge,
+                    gestationalAge: export.gestationalAge,
+                    safetyConcerns: export.safetyConcerns,
+                    advice: export.advice,
+                    disposition: export.disposition,
+                    priority: Priority(rawValue: export.priority) ?? .routine,
+                    callbackCompleted: export.callbackCompleted,
+                    callbackTime: export.callbackTime,
+                    followUpNeeded: export.followUpNeeded,
+                    followUpNote: export.followUpNote,
+                    tags: export.tags,
+                    onCallPhysician: export.onCallPhysician
+                )
+                // Restore identity and timestamps from the backup.
+                if let id = UUID(uuidString: export.id) {
+                    record.id = id
+                }
+                record.dateReceived = export.dateReceived
+                record.dateSaved = export.dateSaved
+                record.lastModified = export.lastModified
+                modelContext.insert(record)
+                imported += 1
+            }
+
+            try modelContext.save()
+
+            let skipped = exports.count - imported
+            importResultMessage = skipped > 0
+                ? "Imported \(imported) record\(imported == 1 ? "" : "s"); skipped \(skipped) already present."
+                : "Imported \(imported) record\(imported == 1 ? "" : "s")."
+            HapticFeedback.success()
+        } catch {
+            importResultMessage = "Import failed: \(error.localizedDescription)"
+            HapticFeedback.error()
+        }
+        showingImportResult = true
     }
 
     private func deleteAllRecords() {
@@ -563,7 +691,16 @@ struct SettingsView: View {
         for record in allRecords {
             modelContext.delete(record)
         }
+        try? modelContext.save()
     }
+}
+
+/// Versioned backup envelope. The schemaVersion field lets a future importer
+/// distinguish and migrate older export formats.
+struct TriageBackup: Codable {
+    var schemaVersion: Int = 1
+    let exportDate: Date
+    let records: [RecordExport]
 }
 
 struct RecordExport: Codable {
