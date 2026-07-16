@@ -27,6 +27,24 @@ struct RecordDetailView: View {
         ZStack {
             Color.bgPrimary.ignoresSafeArea()
 
+            // Guard against re-rendering after deletion: accessing properties
+            // of a deleted SwiftData model during the dismissal animation is
+            // the classic deleted-object crash.
+            if record.isDeleted {
+                EmptyView()
+            } else {
+                detailContent
+            }
+        }
+        .navigationTitle("Record Details")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.bgPrimary, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .preferredColorScheme(.dark)
+    }
+
+    private var detailContent: some View {
+        Group {
             ScrollView {
                 VStack(spacing: 16) {
                     // Priority Header Card
@@ -57,10 +75,6 @@ struct RecordDetailView: View {
                 .padding(16)
             }
         }
-        .navigationTitle("Record Details")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.bgPrimary, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -84,12 +98,15 @@ struct RecordDetailView: View {
             Button("Delete", role: .destructive) {
                 HapticFeedback.impact()
                 modelContext.delete(record)
+                // Persist the deletion immediately so it survives a
+                // force-quit; the isDeleted guard above keeps this view from
+                // touching the dead model during dismissal.
+                try? modelContext.save()
                 dismiss()
             }
         } message: {
             Text("This will permanently delete this triage record. This cannot be undone.")
         }
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Card Components
@@ -363,7 +380,8 @@ struct DetailRow: View {
 
             if isTappable {
                 Button {
-                    // Could add phone call action here
+                    HapticFeedback.impact(.light)
+                    PhoneDialer.call(value)
                 } label: {
                     Text(value)
                         .font(.subheadline.weight(.medium))

@@ -261,6 +261,29 @@ extension Priority {
 
 // MARK: - Haptic Feedback
 
+/// Shared phone-dialing helper so every callback button cleans numbers the
+/// same way — preserving a leading "+" for international numbers, which
+/// digit-only filtering would strip.
+enum PhoneDialer {
+    /// Cleans a phone string and opens the dialer.
+    /// Returns false when no dialable URL could be opened.
+    @discardableResult
+    static func call(_ number: String) -> Bool {
+        let trimmed = number.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasPlus = trimmed.hasPrefix("+")
+        let digits = trimmed.filter { $0.isNumber }
+        guard !digits.isEmpty else { return false }
+
+        let cleaned = (hasPlus ? "+" : "") + digits
+        guard let url = URL(string: "tel://\(cleaned)"),
+              UIApplication.shared.canOpenURL(url) else {
+            return false
+        }
+        UIApplication.shared.open(url)
+        return true
+    }
+}
+
 struct HapticFeedback {
     static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .medium) {
         let generator = UIImpactFeedbackGenerator(style: style)

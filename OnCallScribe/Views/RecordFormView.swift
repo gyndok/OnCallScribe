@@ -40,6 +40,14 @@ struct RecordFormView: View {
     @State private var hasParsed = false
     @State private var parsingState: ParsingState = .idle
 
+    // Form lifecycle
+    @State private var hasLoadedInitialData = false
+    @State private var showDiscardConfirmation = false
+    @State private var showPasteConfirmation = false
+    @State private var pendingClipboardText: String?
+    @State private var showingSaveError = false
+    @State private var saveErrorMessage = ""
+
     // Parsed/Editable fields
     @State private var patientName = ""
     @State private var attendingDoctor = ""
@@ -68,12 +76,62 @@ struct RecordFormView: View {
     @State private var followUpNote = ""
     @State private var onCallPhysician = ""
 
+    /// Specialty driving the form's fields. For edits this is the record's own
+    /// specialty — not the app-wide setting — so switching the app's specialty
+    /// later doesn't hide a record's fields or silently relabel it on save.
     private var currentSpecialty: MedicalSpecialty {
-        MedicalSpecialty(rawValue: selectedSpecialtyRaw) ?? .other
+        if case .edit(let record) = mode {
+            return MedicalSpecialty(rawValue: record.specialty) ?? .other
+        }
+        return MedicalSpecialty(rawValue: selectedSpecialtyRaw) ?? .other
     }
 
     private var canSave: Bool {
-        !rawMessage.isEmpty || !chiefComplaint.isEmpty || !patientName.isEmpty
+        nilIfBlank(rawMessage) != nil || nilIfBlank(chiefComplaint) != nil || nilIfBlank(patientName) != nil
+    }
+
+    /// Trims whitespace and returns nil for blank strings so whitespace-only
+    /// input is stored as nil rather than as a "name" made of spaces.
+    private func nilIfBlank(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var finalDisposition: String? {
+        if selectedDisposition == "Other" {
+            return nilIfBlank(otherDisposition)
+        }
+        return selectedDisposition
+    }
+
+    /// Whether the form differs from what's stored — drives the
+    /// discard-changes confirmation and blocks accidental swipe-dismiss.
+    private var hasUnsavedChanges: Bool {
+        if case .edit(let record) = mode {
+            return rawMessage != record.rawMessage
+                || nilIfBlank(patientName) != record.patientName
+                || nilIfBlank(attendingDoctor) != record.attendingDoctor
+                || nilIfBlank(callbackNumber) != record.callbackNumber
+                || dateOfBirth != record.dateOfBirth
+                || nilIfBlank(obStatus) != record.obStatus
+                || nilIfBlank(chiefComplaint) != record.chiefComplaint
+                || nilIfBlank(patientAge) != record.patientAge
+                || nilIfBlank(gestationalAge) != record.gestationalAge
+                || nilIfBlank(safetyConcerns) != record.safetyConcerns
+                || nilIfBlank(advice) != record.advice
+                || finalDisposition != record.disposition
+                || priority != record.priorityEnum
+                || callbackCompleted != record.callbackCompleted
+                || followUpNeeded != record.followUpNeeded
+                || nilIfBlank(followUpNote) != record.followUpNote
+                || onCallPhysician != record.onCallPhysician
+        }
+        // Creating: anything typed beyond the prefilled physician name counts.
+        return canSave
+            || nilIfBlank(advice) != nil
+            || nilIfBlank(callbackNumber) != nil
+            || selectedDisposition != nil
+            || dateOfBirth != nil
     }
 
     /// Date range for DOB picker: Jan 1, 1900 to today
@@ -161,11 +219,47 @@ struct RecordFormView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") {
-                    dismiss()
+                    if hasUnsavedChanges {
+                        showDiscardConfirmation = true
+                    } else {
+                        dismiss()
+                    }
                 }
                 .foregroundColor(Color.txtSecondary)
                 .disabled(isParsing)
             }
+        }
+        .interactiveDismissDisabled(hasUnsavedChanges)
+        .confirmationDialog(
+            "Discard changes?",
+            isPresented: $showDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) {
+                dismiss()
+            }
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("Your edits have not been saved.")
+        }
+        .confirmationDialog(
+            "Replace message?",
+            isPresented: $showPasteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Replace and Re-Parse", role: .destructive) {
+                applyClipboardText()
+            }
+            Button("Cancel", role: .cancel) {
+                pendingClipboardText = nil
+            }
+        } message: {
+            Text("Re-parsing will overwrite the fields below, including any manual corrections.")
+        }
+        .alert("Couldn't Save Record", isPresented: $showingSaveError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveErrorMessage)
         }
         .onAppear {
             loadInitialData()
@@ -528,6 +622,11 @@ struct RecordFormView: View {
     // MARK: - Actions
 
     private func loadInitialData() {
+        // Only populate once: onAppear can re-fire (e.g. after a cancelled
+        // interactive dismiss), and reloading would wipe in-progress edits.
+        guard !hasLoadedInitialData else { return }
+        hasLoadedInitialData = true
+
         onCallPhysician = defaultPhysicianName
 
         if case .edit(let record) = mode {
@@ -575,11 +674,25 @@ struct RecordFormView: View {
     }
 
     private func pasteFromClipboard() {
-        if let clipboardText = UIPasteboard.general.string {
-            rawMessage = clipboardText
-            Task {
-                await parseMessage()
-            }
+        guard let clipboardText = UIPasteboard.general.string else { return }
+
+        // If a message was already parsed, re-parsing would clobber any manual
+        // corrections the user made to the fields — confirm first.
+        if hasParsed {
+            pendingClipboardText = clipboardText
+            showPasteConfirmation = true
+        } else {
+            pendingClipboardText = clipboardText
+            applyClipboardText()
+        }
+    }
+
+    private func applyClipboardText() {
+        guard let clipboardText = pendingClipboardText else { return }
+        pendingClipboardText = nil
+        rawMessage = clipboardText
+        Task {
+            await parseMessage()
         }
     }
 
@@ -678,55 +791,61 @@ struct RecordFormView: View {
     }
 
     private func saveRecord() {
-        let finalDisposition: String?
-        if selectedDisposition == "Other" && !otherDisposition.isEmpty {
-            finalDisposition = otherDisposition
-        } else {
-            finalDisposition = selectedDisposition
-        }
-
         if case .edit(let record) = mode {
             record.rawMessage = rawMessage
-            record.patientName = patientName.isEmpty ? nil : patientName
-            record.attendingDoctor = attendingDoctor.isEmpty ? nil : attendingDoctor
-            record.callbackNumber = callbackNumber.isEmpty ? nil : callbackNumber
+            record.patientName = nilIfBlank(patientName)
+            record.attendingDoctor = nilIfBlank(attendingDoctor)
+            record.callbackNumber = nilIfBlank(callbackNumber)
             record.dateOfBirth = dateOfBirth
-            record.obStatus = obStatus.isEmpty ? nil : obStatus
-            record.chiefComplaint = chiefComplaint.isEmpty ? nil : chiefComplaint
-            record.specialty = currentSpecialty.rawValue
-            record.patientAge = patientAge.isEmpty ? nil : patientAge
-            record.gestationalAge = gestationalAge.isEmpty ? nil : gestationalAge
-            record.safetyConcerns = safetyConcerns.isEmpty ? nil : safetyConcerns
-            record.advice = advice.isEmpty ? nil : advice
+            record.obStatus = nilIfBlank(obStatus)
+            record.chiefComplaint = nilIfBlank(chiefComplaint)
+            // Deliberately not touching record.specialty: editing a record
+            // must not relabel it with the app's current specialty setting.
+            record.patientAge = nilIfBlank(patientAge)
+            record.gestationalAge = nilIfBlank(gestationalAge)
+            record.safetyConcerns = nilIfBlank(safetyConcerns)
+            record.advice = nilIfBlank(advice)
             record.disposition = finalDisposition
             record.priorityEnum = priority
             record.callbackCompleted = callbackCompleted
             record.followUpNeeded = followUpNeeded
-            record.followUpNote = followUpNote.isEmpty ? nil : followUpNote
+            record.followUpNote = nilIfBlank(followUpNote)
             record.onCallPhysician = onCallPhysician
             record.lastModified = Date()
         } else {
             let record = TriageRecord(
                 rawMessage: rawMessage,
-                attendingDoctor: attendingDoctor.isEmpty ? nil : attendingDoctor,
-                patientName: patientName.isEmpty ? nil : patientName,
-                callbackNumber: callbackNumber.isEmpty ? nil : callbackNumber,
+                attendingDoctor: nilIfBlank(attendingDoctor),
+                patientName: nilIfBlank(patientName),
+                callbackNumber: nilIfBlank(callbackNumber),
                 dateOfBirth: dateOfBirth,
-                obStatus: obStatus.isEmpty ? nil : obStatus,
-                chiefComplaint: chiefComplaint.isEmpty ? nil : chiefComplaint,
+                obStatus: nilIfBlank(obStatus),
+                chiefComplaint: nilIfBlank(chiefComplaint),
                 specialty: currentSpecialty,
-                patientAge: patientAge.isEmpty ? nil : patientAge,
-                gestationalAge: gestationalAge.isEmpty ? nil : gestationalAge,
-                safetyConcerns: safetyConcerns.isEmpty ? nil : safetyConcerns,
-                advice: advice.isEmpty ? nil : advice,
+                patientAge: nilIfBlank(patientAge),
+                gestationalAge: nilIfBlank(gestationalAge),
+                safetyConcerns: nilIfBlank(safetyConcerns),
+                advice: nilIfBlank(advice),
                 disposition: finalDisposition,
                 priority: priority,
                 callbackCompleted: callbackCompleted,
                 followUpNeeded: followUpNeeded,
-                followUpNote: followUpNote.isEmpty ? nil : followUpNote,
+                followUpNote: nilIfBlank(followUpNote),
                 onCallPhysician: onCallPhysician
             )
             modelContext.insert(record)
+        }
+
+        // Persist explicitly: relying on autosave means a force-quit can lose
+        // the record after the user already saw the success feedback, and any
+        // store error would be silently swallowed.
+        do {
+            try modelContext.save()
+        } catch {
+            saveErrorMessage = error.localizedDescription
+            showingSaveError = true
+            HapticFeedback.error()
+            return
         }
 
         HapticFeedback.success()
