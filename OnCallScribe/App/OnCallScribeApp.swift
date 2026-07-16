@@ -48,16 +48,9 @@ struct OnCallScribeApp: App {
         }
         .modelContainer(sharedModelContainer)
         .onChange(of: scenePhase) { oldPhase, newPhase in
-            switch newPhase {
-            case .background:
-                appLockManager.lockApp()
-            case .active:
-                appLockManager.checkLockStatus()
-            case .inactive:
-                break
-            @unknown default:
-                break
-            }
+            // AppLockManager locks on .background (before the app-switcher
+            // snapshot), shields on .inactive, and reconciles on .active.
+            appLockManager.handleScenePhase(newPhase)
         }
     }
 }

@@ -1,5 +1,44 @@
 import SwiftUI
 
+/// Content of the overlay window AppLockManager shows above everything —
+/// including presented sheets, which a root-view ZStack overlay cannot cover.
+/// Shows the full lock screen when locked, or a lightweight privacy cover
+/// while the app is merely inactive (app switcher, Notification Center).
+struct LockOverlayView: View {
+    @State private var appLockManager = AppLockManager.shared
+
+    var body: some View {
+        if appLockManager.isLocked {
+            LockScreenView()
+        } else {
+            PrivacyShieldView()
+        }
+    }
+}
+
+/// Static cover that hides PHI in the app switcher without demanding re-auth.
+struct PrivacyShieldView: View {
+    var body: some View {
+        ZStack {
+            Color.bgPrimary.ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                Image("LaunchImage")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 96, height: 96)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+
+                Text("OnCall Scribe")
+                    .font(.title2.weight(.bold))
+                    .foregroundColor(Color.txtPrimary)
+            }
+        }
+        .preferredColorScheme(.dark)
+        .accessibilityHidden(true)
+    }
+}
+
 struct LockScreenView: View {
     @State private var appLockManager = AppLockManager.shared
 
